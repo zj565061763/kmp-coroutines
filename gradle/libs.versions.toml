@@ -24,7 +24,7 @@ kmp-kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutin
 kmp-cash-turbine = "app.cash.turbine:turbine:1.2.0"
 
 kmp-kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kmp-coroutines" }
-kmp-sd-mutator = "io.github.zj565061763.kmp:mutator:1.0.0"
+kmp-sd-mutator = "io.github.zj565061763.kmp:mutator:1.0.1"
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
