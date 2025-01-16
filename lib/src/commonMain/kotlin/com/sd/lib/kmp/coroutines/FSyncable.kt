@@ -21,6 +21,9 @@ interface FSyncable<T> {
 
   /** 同步并等待结果 */
   suspend fun sync(): Result<T>
+
+  /** 如果正在同步中，则会挂起直到同步结束 */
+  suspend fun awaitIdle()
 }
 
 suspend fun <T> FSyncable<T>.syncOrThrow(): T {
@@ -30,13 +33,6 @@ suspend fun <T> FSyncable<T>.syncOrThrow(): T {
 suspend fun <T> FSyncable<T>.syncOrThrowCancellation(): Result<T> {
   return sync().onFailure { e ->
     if (e is CancellationException) throw e
-  }
-}
-
-/** 如果正在同步中，则会挂起直到同步结束 */
-suspend fun FSyncable<*>.awaitIdle() {
-  if (isSyncing) {
-    syncingFlow.first { !it }
   }
 }
 
@@ -87,6 +83,14 @@ private class SyncableImpl<T>(
       }
     }.also {
       currentCoroutineContext().ensureActive()
+    }
+  }
+
+  override suspend fun awaitIdle() {
+    withContext(Dispatchers.preferMainImmediate) {
+      if (_syncing) {
+        _syncingFlow.first { !it }
+      }
     }
   }
 
