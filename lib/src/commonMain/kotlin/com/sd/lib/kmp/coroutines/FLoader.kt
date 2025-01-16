@@ -13,7 +13,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
 interface FLoader {
@@ -97,32 +100,44 @@ private class LoaderImpl : FLoader {
     onLoad: suspend () -> T,
   ): Result<T> {
     return _mutator.mutate {
-      try {
-        if (notifyLoading) {
-          _stateFlow.update { it.copy(isLoading = true) }
-        }
-        onLoad().let { data ->
-          Result.success(data).also {
-            ensureMutateActive()
-            _stateFlow.update { it.copy(result = Result.success(Unit)) }
-          }
-        }
-      } catch (e: Throwable) {
-        if (e is CancellationException) throw e
-        Result.failure<T>(e).also {
-          ensureMutateActive()
-          _stateFlow.update { it.copy(result = Result.failure(e)) }
-        }
-      } finally {
-        if (notifyLoading) {
-          _stateFlow.update { it.copy(isLoading = false) }
-        }
+      withContext(Dispatchers.Main) {
+        doLoad(
+          notifyLoading = notifyLoading,
+          onLoad = onLoad,
+        )
       }
     }
   }
 
   override suspend fun cancel() {
-    _mutator.cancelAndJoin()
+    _mutator.cancel()
+  }
+
+  private suspend fun <T> Mutator.MutateScope.doLoad(
+    notifyLoading: Boolean,
+    onLoad: suspend () -> T,
+  ): Result<T> {
+    return try {
+      if (notifyLoading) {
+        _stateFlow.update { it.copy(isLoading = true) }
+      }
+      onLoad().let { data ->
+        Result.success(data).also {
+          ensureMutateActive()
+          _stateFlow.update { it.copy(result = Result.success(Unit)) }
+        }
+      }
+    } catch (e: Throwable) {
+      if (e is CancellationException) throw e
+      Result.failure<T>(e).also {
+        ensureMutateActive()
+        _stateFlow.update { it.copy(result = Result.failure(e)) }
+      }
+    } finally {
+      if (notifyLoading) {
+        _stateFlow.update { it.copy(isLoading = false) }
+      }
+    }
   }
 }
 
@@ -130,25 +145,35 @@ private class LoaderImpl : FLoader {
 
 private class Mutator {
   private var _job: Job? = null
+  private val _jobMutex = Mutex()
+  private val _mutateMutex = Mutex()
 
   suspend fun <R> mutate(block: suspend MutateScope.() -> R): R = coroutineScope {
-    val mutateContext = currentCoroutineContext()
-    val mutateScope = object : MutateScope {
+    val mutateContext = coroutineContext
+
+    _jobMutex.withLock {
+      _job?.cancelAndJoin()
+      _job = mutateContext[Job]
+    }
+
+    _mutateMutex.withLock {
+      with(newMutateScope(mutateContext)) {
+        ensureMutateActive()
+        block().also { ensureMutateActive() }
+      }
+    }
+  }
+
+  suspend fun cancel() {
+    _job?.cancelAndJoin()
+  }
+
+  private fun newMutateScope(mutateContext: CoroutineContext): MutateScope {
+    return object : MutateScope {
       override suspend fun ensureMutateActive() {
         currentCoroutineContext().ensureActive()
         mutateContext.ensureActive()
       }
-    }
-    withContext(Dispatchers.Main) {
-      _job?.cancelAndJoin()
-      _job = mutateContext[Job]
-      with(mutateScope) { block() }
-    }
-  }
-
-  suspend fun cancelAndJoin() {
-    withContext(Dispatchers.Main) {
-      _job?.cancelAndJoin()
     }
   }
 
