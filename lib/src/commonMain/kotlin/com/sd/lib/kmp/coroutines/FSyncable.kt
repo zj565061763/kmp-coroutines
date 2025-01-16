@@ -79,7 +79,7 @@ private class SyncableImpl<T>(
     if (currentCoroutineContext()[SyncElement]?.tag === this@SyncableImpl) {
       throw ReSyncException("Can not call sync in the onSync block.")
     }
-    return withContext(Dispatchers.Main) {
+    return withContext(Dispatchers.preferMainImmediate) {
       if (_syncing) {
         _continuations.await()
       } else {
