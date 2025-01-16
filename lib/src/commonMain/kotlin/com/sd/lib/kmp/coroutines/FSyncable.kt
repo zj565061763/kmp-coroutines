@@ -76,11 +76,11 @@ private class SyncableImpl<T>(
     get() = _syncingFlow.asStateFlow()
 
   override suspend fun sync(): Result<T> {
+    if (currentCoroutineContext()[SyncElement]?.tag === this@SyncableImpl) {
+      throw ReSyncException("Can not call sync in the onSync block.")
+    }
     return withContext(Dispatchers.Main) {
       if (_syncing) {
-        if (currentCoroutineContext()[SyncElement]?.tag === this@SyncableImpl) {
-          throw ReSyncException("Can not call sync in the onSync block.")
-        }
         _continuations.await()
       } else {
         doSync()
