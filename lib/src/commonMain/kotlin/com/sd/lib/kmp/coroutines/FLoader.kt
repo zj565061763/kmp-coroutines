@@ -1,11 +1,7 @@
 package com.sd.lib.kmp.coroutines
 
+import com.sd.lib.kmp.mutator.Mutator
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,10 +9,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
 interface FLoader {
@@ -35,6 +28,8 @@ interface FLoader {
   /**
    * 开始加载，如果上一次加载还未完成，再次调用此方法，会取消上一次加载，
    * [onLoad]在主线程触发，它的异常会被捕获，除了[CancellationException]
+   *
+   * 注意：[onLoad]中不允许嵌套调用[load]，否则会抛异常
    *
    * @param notifyLoading 是否通知加载状态
    * @param onLoad 加载回调
@@ -110,7 +105,7 @@ private class LoaderImpl : FLoader {
   }
 
   override suspend fun cancel() {
-    _mutator.cancel()
+    _mutator.cancelMutate()
   }
 
   private suspend fun <T> Mutator.MutateScope.doLoad(
@@ -139,59 +134,5 @@ private class LoaderImpl : FLoader {
         _stateFlow.update { it.copy(isLoading = false) }
       }
     }
-  }
-}
-
-//-------------------- Mutator --------------------
-
-private class Mutator {
-  private var _job: Job? = null
-  private val _jobMutex = Mutex()
-  private val _mutateMutex = Mutex()
-
-  suspend fun <R> mutate(block: suspend MutateScope.() -> R): R = coroutineScope {
-    val mutateContext = coroutineContext
-    val mutateJob = checkNotNull(mutateContext[Job])
-
-    _jobMutex.withLock {
-      _job?.cancelAndJoin()
-      _job = mutateJob
-    }
-
-    try {
-      _mutateMutex.withLock {
-        with(newMutateScope(mutateContext)) {
-          block()
-        }
-      }
-    } finally {
-      releaseJob(mutateJob)
-    }
-  }
-
-  suspend fun cancel() {
-    _jobMutex.withLock {
-      _job?.cancelAndJoin()
-    }
-  }
-
-  /** 释放Job，不一定会成功，因为当前协程可能已经被取消 */
-  private suspend fun releaseJob(job: Job) {
-    _jobMutex.withLock {
-      if (_job === job) _job = null
-    }
-  }
-
-  private fun newMutateScope(mutateContext: CoroutineContext): MutateScope {
-    return object : MutateScope {
-      override suspend fun ensureMutateActive() {
-        currentCoroutineContext().ensureActive()
-        mutateContext.ensureActive()
-      }
-    }
-  }
-
-  interface MutateScope {
-    suspend fun ensureMutateActive()
   }
 }

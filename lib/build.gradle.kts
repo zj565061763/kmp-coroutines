@@ -30,6 +30,7 @@ kotlin {
   sourceSets {
     commonMain.dependencies {
       implementation(libs.kmp.kotlinx.coroutines.core)
+      implementation(libs.kmp.sd.mutator)
     }
     commonTest.dependencies {
       implementation(libs.kmp.kotlin.test)

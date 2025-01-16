@@ -191,4 +191,22 @@ class LoaderTest : MainDispatcherTest() {
       assertEquals(2, count.get())
     }
   }
+
+  @Test
+  fun `test nested load`() = runTest {
+    val loader = FLoader()
+    val list = mutableListOf<String>()
+
+    loader.load {
+      runCatching {
+        loader.load { }
+      }.also {
+        assertEquals("Nested mutate", it.exceptionOrNull()!!.message)
+        list.add("1")
+      }
+      list.add("2")
+    }
+
+    assertEquals(listOf("1", "2"), list)
+  }
 }
