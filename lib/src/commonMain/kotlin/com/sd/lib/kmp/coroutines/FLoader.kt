@@ -117,6 +117,7 @@ private class LoaderImpl : FLoader {
     notifyLoading: Boolean,
     onLoad: suspend () -> T,
   ): Result<T> {
+    ensureMutateActive()
     return try {
       if (notifyLoading) {
         _stateFlow.update { it.copy(isLoading = true) }
@@ -150,23 +151,34 @@ private class Mutator {
 
   suspend fun <R> mutate(block: suspend MutateScope.() -> R): R = coroutineScope {
     val mutateContext = coroutineContext
+    val mutateJob = checkNotNull(mutateContext[Job])
 
     _jobMutex.withLock {
       _job?.cancelAndJoin()
-      _job = mutateContext[Job]
+      _job = mutateJob
     }
 
-    _mutateMutex.withLock {
-      with(newMutateScope(mutateContext)) {
-        ensureMutateActive()
-        block().also { ensureMutateActive() }
+    try {
+      _mutateMutex.withLock {
+        with(newMutateScope(mutateContext)) {
+          block()
+        }
       }
+    } finally {
+      releaseJob(mutateJob)
     }
   }
 
   suspend fun cancel() {
     _jobMutex.withLock {
       _job?.cancelAndJoin()
+    }
+  }
+
+  /** 释放Job，不一定会成功，因为当前协程可能已经被取消 */
+  private suspend fun releaseJob(job: Job) {
+    _jobMutex.withLock {
+      if (_job === job) _job = null
     }
   }
 
