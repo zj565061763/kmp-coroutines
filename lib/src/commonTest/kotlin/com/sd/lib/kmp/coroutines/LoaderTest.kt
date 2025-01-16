@@ -3,7 +3,6 @@ package com.sd.lib.kmp.coroutines
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -148,25 +147,6 @@ class LoaderTest : MainDispatcherTest() {
       assertEquals(true, awaitItem())
       assertEquals(false, awaitItem())
     }
-  }
-
-  @Test
-  fun `test tryLoad`() = runTest {
-    val loader = FLoader()
-
-    val job = launch {
-      loader.load { delay(Long.MAX_VALUE) }
-    }.also {
-      runCurrent()
-    }
-
-    runCatching {
-      loader.tryLoad { 1 }
-    }.also { result ->
-      assertEquals(true, result.exceptionOrNull() is CancellationException)
-    }
-
-    job.cancelAndJoin()
   }
 
   @Test

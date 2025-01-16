@@ -51,18 +51,6 @@ interface FLoader {
   )
 }
 
-/** 如果正在加载中，会抛出[CancellationException]异常，取消当前调用[tryLoad]的协程 */
-suspend fun <T> FLoader.tryLoad(
-  notifyLoading: Boolean = true,
-  onLoad: suspend () -> T,
-): Result<T> {
-  if (isLoading) throw CancellationException()
-  return load(
-    notifyLoading = notifyLoading,
-    onLoad = onLoad,
-  )
-}
-
 /** 如果正在加载中，则会挂起直到加载结束 */
 suspend fun FLoader.awaitIdle() {
   if (isLoading) {
