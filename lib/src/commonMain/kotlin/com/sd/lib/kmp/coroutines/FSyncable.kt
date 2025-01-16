@@ -3,8 +3,8 @@ package com.sd.lib.kmp.coroutines
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -13,11 +13,8 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
 interface FSyncable<T> {
-  /** 是否正在同步中 */
-  val isSyncing: Boolean
-
   /** 是否正在同步中状态流 */
-  val syncingFlow: Flow<Boolean>
+  val syncingFlow: StateFlow<Boolean>
 
   /** 同步并等待结果 */
   suspend fun sync(): Result<T>
@@ -65,10 +62,7 @@ private class SyncableImpl<T>(
       _syncingFlow.value = value
     }
 
-  override val isSyncing: Boolean
-    get() = _syncing
-
-  override val syncingFlow: Flow<Boolean>
+  override val syncingFlow: StateFlow<Boolean>
     get() = _syncingFlow.asStateFlow()
 
   override suspend fun sync(): Result<T> {

@@ -1,5 +1,6 @@
 package com.sd.lib.kmp.coroutines
 
+import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
@@ -79,15 +80,20 @@ class SyncableTest : MainDispatcherTest() {
   @Test
   fun `test syncing when cancel sync`() = runTest {
     val syncable = FSyncable { delay(5_000) }
+    syncable.syncingFlow.test {
+      assertEquals(false, syncable.syncingFlow.value)
+      val job = launch { syncable.sync() }
 
-    assertEquals(false, syncable.isSyncing)
-    val job = launch { syncable.sync() }
+      runCurrent()
+      assertEquals(true, syncable.syncingFlow.value)
 
-    runCurrent()
-    assertEquals(true, syncable.isSyncing)
+      job.cancelAndJoin()
+      assertEquals(false, syncable.syncingFlow.value)
 
-    job.cancelAndJoin()
-    assertEquals(false, syncable.isSyncing)
+      assertEquals(false, awaitItem())
+      assertEquals(true, awaitItem())
+      assertEquals(false, awaitItem())
+    }
   }
 
   @Test
@@ -257,15 +263,21 @@ class SyncableTest : MainDispatcherTest() {
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-private fun TestScope.testSyncing(syncable: FSyncable<*>) {
-  assertEquals(false, syncable.isSyncing)
-  launch { syncable.sync() }
+private suspend fun TestScope.testSyncing(syncable: FSyncable<*>) {
+  syncable.syncingFlow.test {
+    assertEquals(false, syncable.syncingFlow.value)
+    launch { syncable.sync() }
 
-  runCurrent()
-  assertEquals(true, syncable.isSyncing)
+    runCurrent()
+    assertEquals(true, syncable.syncingFlow.value)
 
-  advanceUntilIdle()
-  assertEquals(false, syncable.isSyncing)
+    advanceUntilIdle()
+    assertEquals(false, syncable.syncingFlow.value)
+
+    assertEquals(false, awaitItem())
+    assertEquals(true, awaitItem())
+    assertEquals(false, awaitItem())
+  }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
