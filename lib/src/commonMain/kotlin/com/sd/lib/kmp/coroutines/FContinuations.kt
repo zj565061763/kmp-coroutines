@@ -10,8 +10,8 @@ import kotlin.coroutines.resumeWithException
 
 @OptIn(InternalCoroutinesApi::class)
 class FContinuations<T> {
-  private val _holder = mutableListOf<CancellableContinuation<T>>()
   private val _lock = SynchronizedObject()
+  private val _holder = mutableListOf<CancellableContinuation<T>>()
 
   suspend fun await(): T {
     return suspendCancellableCoroutine { cont ->
