@@ -165,7 +165,9 @@ private class Mutator {
   }
 
   suspend fun cancel() {
-    _job?.cancelAndJoin()
+    _jobMutex.withLock {
+      _job?.cancelAndJoin()
+    }
   }
 
   private fun newMutateScope(mutateContext: CoroutineContext): MutateScope {
