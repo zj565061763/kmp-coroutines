@@ -1,4 +1,4 @@
-package com.sd.demo.kmp.coroutines.navigation
+package com.sd.demo.kmp.coroutines
 
 import kotlinx.serialization.Serializable
 
