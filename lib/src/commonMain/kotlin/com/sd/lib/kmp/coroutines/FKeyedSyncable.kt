@@ -31,10 +31,7 @@ class FKeyedSyncable<T> {
     }
   }
 
-  private fun newSyncable(
-    key: String,
-    block: suspend () -> T,
-  ): FSyncable<T> {
+  private fun newSyncable(key: String, block: suspend () -> T): FSyncable<T> {
     return FSyncable {
       _loadingState.update(key, state = true)
       try {
