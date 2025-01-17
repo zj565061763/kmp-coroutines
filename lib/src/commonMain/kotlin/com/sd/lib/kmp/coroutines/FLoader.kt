@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
@@ -49,13 +48,6 @@ interface FLoader {
     /** 最后一次的加载结果 */
     val result: Result<Unit>? = null,
   )
-}
-
-/** 如果正在加载中，则会挂起直到加载结束 */
-suspend fun FLoader.awaitIdle() {
-  if (isLoading) {
-    loadingFlow.first { !it }
-  }
 }
 
 fun FLoader(): FLoader = LoaderImpl()

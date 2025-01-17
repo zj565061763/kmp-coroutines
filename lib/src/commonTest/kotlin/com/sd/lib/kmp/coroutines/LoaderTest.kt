@@ -6,7 +6,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.coroutines.cancellation.CancellationException
@@ -146,29 +145,6 @@ class LoaderTest : MainDispatcherTest() {
       assertEquals(false, awaitItem())
       assertEquals(true, awaitItem())
       assertEquals(false, awaitItem())
-    }
-  }
-
-  @Test
-  fun `test awaitIdle`() = runTest {
-    val loader = FLoader()
-
-    launch {
-      loader.load { delay(5_000) }
-    }.also {
-      runCurrent()
-    }
-
-    val count = TestCounter()
-    launch {
-      count.incrementAndGet()
-      loader.awaitIdle()
-      count.incrementAndGet()
-    }.also {
-      runCurrent()
-      assertEquals(1, count.get())
-      advanceUntilIdle()
-      assertEquals(2, count.get())
     }
   }
 
