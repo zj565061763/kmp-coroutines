@@ -8,24 +8,27 @@ class FKeyedSyncable<T> {
   private val _holder = mutableMapOf<String, FSyncable<T>>()
   private val _loadingState = FKeyedState { false }
 
-  suspend fun sync(
-    key: String,
-    block: suspend () -> T,
-  ): Result<T> {
+  suspend fun sync(key: String, block: suspend () -> T): Result<T> {
     return withContext(Dispatchers.preferMainImmediate) {
-      _holder[key]?.sync() ?: newSyncable(key, block).let { syncable ->
-        _holder[key] = syncable
-        try {
-          syncable.sync()
-        } finally {
-          _holder.remove(key)
-        }
-      }
+      doSync(key, block)
     }
   }
 
   fun syncingFlow(key: String): Flow<Boolean> {
     return _loadingState.flowOf(key)
+  }
+
+  private suspend fun doSync(key: String, block: suspend () -> T): Result<T> {
+    val cache = _holder[key]
+    if (cache != null) return cache.sync()
+    return newSyncable(key, block).let { syncable ->
+      _holder[key] = syncable
+      try {
+        syncable.sync()
+      } finally {
+        _holder.remove(key)
+      }
+    }
   }
 
   private fun newSyncable(
