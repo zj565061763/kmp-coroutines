@@ -66,9 +66,7 @@ private class SyncableImpl<T>(
     get() = _syncingFlow.asStateFlow()
 
   override suspend fun sync(): Result<T> {
-    if (currentCoroutineContext()[SyncElement]?.tag === this@SyncableImpl) {
-      throw ReSyncException("Can not call sync in the onSync block.")
-    }
+    checkNestedSync()
     return withContext(Dispatchers.preferMainImmediate) {
       if (_syncing) {
         _continuations.await()
@@ -91,13 +89,13 @@ private class SyncableImpl<T>(
   private suspend fun doSync(): Result<T> {
     return try {
       _syncing = true
-      withContext(SyncElement(tag = this@SyncableImpl)) {
+      withContext(SyncElement(syncable = this@SyncableImpl)) {
         onSync()
       }.let { data ->
         Result.success(data).also { _continuations.resumeAll(it) }
       }
     } catch (e: Throwable) {
-      if (e is ReSyncException) {
+      if (e is NestedSyncException) {
         _continuations.cancelAll()
         throw e
       } else {
@@ -107,13 +105,20 @@ private class SyncableImpl<T>(
       _syncing = false
     }
   }
-}
 
-private class SyncElement(
-  val tag: FSyncable<*>,
-) : AbstractCoroutineContextElement(SyncElement) {
-  companion object Key : CoroutineContext.Key<SyncElement>
-}
+  private suspend fun checkNestedSync() {
+    val element = currentCoroutineContext()[SyncElement]
+    if (element?.syncable === this@SyncableImpl) {
+      throw NestedSyncException("Can not call sync in the onSync block.")
+    }
+  }
 
-/** 嵌套同步异常 */
-private class ReSyncException(message: String) : IllegalStateException(message)
+  private class SyncElement(
+    val syncable: FSyncable<*>,
+  ) : AbstractCoroutineContextElement(SyncElement) {
+    companion object Key : CoroutineContext.Key<SyncElement>
+  }
+
+  /** 嵌套同步异常 */
+  private class NestedSyncException(message: String) : IllegalStateException(message)
+}
