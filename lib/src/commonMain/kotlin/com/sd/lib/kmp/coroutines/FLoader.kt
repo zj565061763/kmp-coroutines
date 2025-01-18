@@ -1,6 +1,5 @@
 package com.sd.lib.kmp.coroutines
 
-import com.sd.lib.kmp.mutator.Mutator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,7 +62,7 @@ fun FLoader(): FLoader = LoaderImpl()
 //-------------------- impl --------------------
 
 private class LoaderImpl : FLoader {
-  private val _mutator = Mutator()
+  private val _mutator = FMutator()
   private val _stateFlow = MutableStateFlow(FLoader.State())
 
   override val stateFlow: Flow<FLoader.State>
@@ -107,7 +106,7 @@ private class LoaderImpl : FLoader {
     _mutator.cancelMutate()
   }
 
-  private suspend fun <T> Mutator.MutateScope.doLoad(
+  private suspend fun <T> FMutator.MutateScope.doLoad(
     notifyLoading: Boolean,
     onLoad: suspend () -> T,
   ): Result<T> {
