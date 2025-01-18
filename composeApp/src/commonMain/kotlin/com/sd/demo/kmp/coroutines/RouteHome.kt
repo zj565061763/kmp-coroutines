@@ -12,17 +12,14 @@ import androidx.compose.ui.Modifier
 
 @Composable
 fun RouteHome(
-  modifier: Modifier = Modifier,
   onClickSample: () -> Unit,
 ) {
-  Scaffold(modifier = modifier.fillMaxSize()) { padding ->
+  Scaffold { padding ->
     Column(
       modifier = Modifier.fillMaxSize().padding(padding),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-      Button(onClick = onClickSample) {
-        Text(text = "Sample")
-      }
+      Button(onClick = onClickSample) { Text(text = "Sample") }
     }
   }
 }
