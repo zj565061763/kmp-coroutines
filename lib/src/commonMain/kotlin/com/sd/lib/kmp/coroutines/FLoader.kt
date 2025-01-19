@@ -1,13 +1,21 @@
 package com.sd.lib.kmp.coroutines
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
 interface FLoader {
@@ -25,7 +33,7 @@ interface FLoader {
 
   /**
    * 开始加载，如果上一次加载还未完成，再次调用此方法，会取消上一次加载，
-   * [onLoad]在主线程触发，它的异常会被捕获，除了[CancellationException]
+   * [onLoad]的异常会被捕获，除了[CancellationException]
    *
    * 注意：[onLoad]中不允许嵌套调用[load]，否则会抛异常
    *
@@ -38,7 +46,7 @@ interface FLoader {
   ): Result<T>
 
   /**
-   * 如果正在加载中，会抛出[CancellationException]异常，取消当前调用[tryLoad]的协程
+   * 如果正在加载中，会抛出[CancellationException]
    */
   suspend fun <T> tryLoad(
     notifyLoading: Boolean = true,
@@ -62,7 +70,7 @@ fun FLoader(): FLoader = LoaderImpl()
 //-------------------- impl --------------------
 
 private class LoaderImpl : FLoader {
-  private val _mutator = FMutator()
+  private val _mutator = Mutator()
   private val _stateFlow = MutableStateFlow(FLoader.State())
 
   override val stateFlow: Flow<FLoader.State>
@@ -82,12 +90,10 @@ private class LoaderImpl : FLoader {
     onLoad: suspend () -> T,
   ): Result<T> {
     return _mutator.mutate {
-      withContext(Dispatchers.preferMainImmediate) {
-        doLoad(
-          notifyLoading = notifyLoading,
-          onLoad = onLoad,
-        )
-      }
+      doLoad(
+        notifyLoading = notifyLoading,
+        onLoad = onLoad,
+      )
     }
   }
 
@@ -95,18 +101,19 @@ private class LoaderImpl : FLoader {
     notifyLoading: Boolean,
     onLoad: suspend () -> T,
   ): Result<T> {
-    if (_mutator.isMutating()) throw CancellationException()
-    return load(
-      notifyLoading = notifyLoading,
-      onLoad = onLoad,
-    )
+    return _mutator.tryMutate {
+      doLoad(
+        notifyLoading = notifyLoading,
+        onLoad = onLoad,
+      )
+    }
   }
 
   override suspend fun cancel() {
     _mutator.cancelMutate()
   }
 
-  private suspend fun <T> FMutator.MutateScope.doLoad(
+  private suspend fun <T> Mutator.MutateScope.doLoad(
     notifyLoading: Boolean,
     onLoad: suspend () -> T,
   ): Result<T> {
@@ -131,5 +138,90 @@ private class LoaderImpl : FLoader {
         _stateFlow.update { it.copy(isLoading = false) }
       }
     }
+  }
+}
+
+private class Mutator {
+  private var _job: Job? = null
+  private val _jobMutex = Mutex()
+  private val _mutateMutex = Mutex()
+
+  suspend fun <R> mutate(block: suspend MutateScope.() -> R): R {
+    checkNested()
+    return mutate(
+      onStart = {},
+      block = block,
+    )
+  }
+
+  suspend fun <T> tryMutate(block: suspend MutateScope.() -> T): T {
+    checkNested()
+    return mutate(
+      onStart = { if (_job?.isActive == true) throw CancellationException() },
+      block = block,
+    )
+  }
+
+  suspend fun cancelMutate() {
+    _jobMutex.withLock {
+      _job?.cancelAndJoin()
+    }
+  }
+
+  private suspend fun <R> mutate(
+    onStart: () -> Unit,
+    block: suspend MutateScope.() -> R,
+  ): R {
+    return coroutineScope {
+      val mutateContext = coroutineContext
+      val mutateJob = checkNotNull(mutateContext[Job])
+
+      _jobMutex.withLock {
+        onStart()
+        _job?.cancelAndJoin()
+        _job = mutateJob
+      }
+
+      try {
+        doMutate {
+          with(newMutateScope(mutateContext)) { block() }
+        }
+      } finally {
+        if (_jobMutex.tryLock()) {
+          if (_job === mutateJob) _job = null
+          _jobMutex.unlock()
+        }
+      }
+    }
+  }
+
+  private suspend fun <T> doMutate(block: suspend () -> T): T {
+    return _mutateMutex.withLock {
+      withContext(MutateElement(mutator = this@Mutator)) {
+        block()
+      }
+    }
+  }
+
+  private fun newMutateScope(mutateContext: CoroutineContext): MutateScope {
+    return object : MutateScope {
+      override suspend fun ensureMutateActive() {
+        currentCoroutineContext().ensureActive()
+        mutateContext.ensureActive()
+      }
+    }
+  }
+
+  private suspend fun checkNested() {
+    val element = currentCoroutineContext()[MutateElement]
+    if (element?.mutator === this@Mutator) error("Nested invoke")
+  }
+
+  private class MutateElement(val mutator: Mutator) : AbstractCoroutineContextElement(MutateElement) {
+    companion object Key : CoroutineContext.Key<MutateElement>
+  }
+
+  interface MutateScope {
+    suspend fun ensureMutateActive()
   }
 }

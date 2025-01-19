@@ -177,7 +177,7 @@ class LoaderTest : MainDispatcherTest() {
       runCatching {
         loader.load { }
       }.also {
-        assertEquals("Already in Mutate", it.exceptionOrNull()!!.message)
+        assertEquals("Nested invoke", it.exceptionOrNull()!!.message)
         list.add("1")
       }
       list.add("2")
