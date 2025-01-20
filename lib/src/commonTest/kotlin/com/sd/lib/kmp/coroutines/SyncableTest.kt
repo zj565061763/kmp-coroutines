@@ -243,7 +243,7 @@ class SyncableTest : MainDispatcherTest() {
   }
 
   @Test
-  fun `test reSync error`() = runTest {
+  fun `test nested sync error`() = runTest {
     val array = arrayOf<FSyncable<*>?>(null)
 
     val syncable = FSyncable {
@@ -258,7 +258,26 @@ class SyncableTest : MainDispatcherTest() {
       e
     }
 
-    assertEquals("Can not call sync in the onSync block.", (result as Throwable).message)
+    assertEquals("Nested invoke", (result as Throwable).message)
+  }
+
+  @Test
+  fun `test nested awaitIdle error`() = runTest {
+    val array = arrayOf<FSyncable<*>?>(null)
+
+    val syncable = FSyncable {
+      delay(1_000)
+      array[0]!!.awaitIdle()
+      1
+    }.also { array[0] = it }
+
+    val result = try {
+      syncable.sync()
+    } catch (e: Throwable) {
+      e
+    }
+
+    assertEquals("Nested invoke", (result as Throwable).message)
   }
 }
 

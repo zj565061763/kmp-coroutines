@@ -66,7 +66,7 @@ private class SyncableImpl<T>(
     get() = _syncingFlow.asStateFlow()
 
   override suspend fun sync(): Result<T> {
-    checkNestedSync()
+    checkNested()
     return withContext(Dispatchers.preferMainImmediate) {
       if (_syncing) {
         _continuations.await()
@@ -79,6 +79,7 @@ private class SyncableImpl<T>(
   }
 
   override suspend fun awaitIdle() {
+    checkNested()
     withContext(Dispatchers.preferMainImmediate) {
       if (_syncing) {
         _syncingFlow.first { !it }
@@ -95,7 +96,7 @@ private class SyncableImpl<T>(
         Result.success(data).also { _continuations.resumeAll(it) }
       }
     } catch (e: Throwable) {
-      if (e is NestedSyncException) {
+      if (e is NestedInvokeException) {
         _continuations.cancelAll()
         throw e
       } else {
@@ -106,10 +107,10 @@ private class SyncableImpl<T>(
     }
   }
 
-  private suspend fun checkNestedSync() {
+  private suspend fun checkNested() {
     val element = currentCoroutineContext()[SyncElement]
     if (element?.syncable === this@SyncableImpl) {
-      throw NestedSyncException("Can not call sync in the onSync block.")
+      throw NestedInvokeException("Nested invoke")
     }
   }
 
@@ -119,6 +120,5 @@ private class SyncableImpl<T>(
     companion object Key : CoroutineContext.Key<SyncElement>
   }
 
-  /** 嵌套同步异常 */
-  private class NestedSyncException(message: String) : IllegalStateException(message)
+  private class NestedInvokeException(message: String) : IllegalStateException(message)
 }
