@@ -252,13 +252,11 @@ class SyncableTest : MainDispatcherTest() {
       1
     }.also { array[0] = it }
 
-    val result = try {
+    runCatching {
       syncable.sync()
-    } catch (e: Throwable) {
-      e
+    }.also {
+      assertEquals("Nested invoke", it.exceptionOrNull()!!.message)
     }
-
-    assertEquals("Nested invoke", (result as Throwable).message)
   }
 
   @Test
@@ -271,13 +269,11 @@ class SyncableTest : MainDispatcherTest() {
       1
     }.also { array[0] = it }
 
-    val result = try {
+    runCatching {
       syncable.sync()
-    } catch (e: Throwable) {
-      e
+    }.also {
+      assertEquals("Nested invoke", it.exceptionOrNull()!!.message)
     }
-
-    assertEquals("Nested invoke", (result as Throwable).message)
   }
 }
 
