@@ -65,6 +65,9 @@ interface FLoader {
   )
 
   interface LoadScope {
+    /**
+     * onLoad成功或者失败都会触发[block]，触发时所在的协程可能已经被取消
+     */
     fun onLoadFinish(block: suspend () -> Unit)
   }
 }
@@ -119,7 +122,6 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
   }
 
   override fun onLoadFinish(block: suspend () -> Unit) {
-    // 直接赋值，不验证当前是否正在执行onLoad
     _onFinishBlock = block
   }
 
