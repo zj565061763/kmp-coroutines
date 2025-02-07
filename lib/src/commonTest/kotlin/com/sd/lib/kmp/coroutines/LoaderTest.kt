@@ -20,78 +20,108 @@ class LoaderTest : MainDispatcherTest() {
   fun `test load when success`() = runTest {
     val loader = FLoader()
     assertEquals(null, loader.state.result)
+
+    var container = ""
     loader.load {
+      onLoadFinish { container += "onLoadFinish" }
       1
     }.also { result ->
       assertEquals(true, loader.state.result!!.isSuccess)
       assertEquals(1, result.getOrThrow())
+      assertEquals("onLoadFinish", container)
     }
   }
 
   @Test
   fun `test load when error in block`() = runTest {
     val loader = FLoader()
+
+    var container = ""
     loader.load {
+      onLoadFinish { container += "onLoadFinish" }
       error("error in block")
     }.also { result ->
       assertEquals("error in block", result.exceptionOrNull()!!.message)
       assertEquals("error in block", loader.state.result!!.exceptionOrNull()!!.message)
+      assertEquals("onLoadFinish", container)
     }
   }
 
   @Test
   fun `test load when loading`() = runTest {
     val loader = FLoader()
+    var container = ""
 
     val job = launch {
-      loader.load { delay(Long.MAX_VALUE) }
+      loader.load {
+        onLoadFinish { container += "onLoadFinish1" }
+        delay(Long.MAX_VALUE)
+      }
     }.also {
       runCurrent()
     }
 
     loader.load {
+      onLoadFinish { container += "onLoadFinish2" }
+      assertEquals("onLoadFinish1", container)
       assertEquals(true, job.isCancelled)
       assertEquals(true, job.isCompleted)
       2
     }.also { result ->
       assertEquals(2, result.getOrThrow())
+      assertEquals("onLoadFinish1onLoadFinish2", container)
     }
   }
 
   @Test
   fun `test load when cancel`() = runTest {
     val loader = FLoader()
+    var container = ""
     launch {
-      loader.load { delay(Long.MAX_VALUE) }
+      loader.load {
+        onLoadFinish { container += "onLoadFinish" }
+        delay(Long.MAX_VALUE)
+      }
     }.also { job ->
       runCurrent()
       loader.cancel()
       assertEquals(true, job.isCancelled)
       assertEquals(true, job.isCompleted)
+      assertEquals("onLoadFinish", container)
     }
   }
 
   @Test
   fun `test load when throw CancellationException in block`() = runTest {
     val loader = FLoader()
+    var container = ""
     launch {
-      loader.load { throw CancellationException() }
+      loader.load {
+        onLoadFinish { container += "onLoadFinish" }
+        throw CancellationException()
+      }
     }.also { job ->
       runCurrent()
       assertEquals(true, job.isCancelled)
       assertEquals(true, job.isCompleted)
+      assertEquals("onLoadFinish", container)
     }
   }
 
   @Test
   fun `test load when cancel in block`() = runTest {
     val loader = FLoader()
+    var container = ""
     launch {
-      loader.load { currentCoroutineContext().cancel() }
+      loader.load {
+        onLoadFinish { container += "onLoadFinish" }
+        currentCoroutineContext().cancel()
+      }
     }.also { job ->
       runCurrent()
       assertEquals(true, job.isCancelled)
       assertEquals(true, job.isCompleted)
+      assertEquals("onLoadFinish", container)
     }
   }
 
