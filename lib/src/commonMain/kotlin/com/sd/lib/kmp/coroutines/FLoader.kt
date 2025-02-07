@@ -42,7 +42,7 @@ interface FLoader {
    */
   suspend fun <T> load(
     notifyLoading: Boolean = true,
-    onLoad: suspend () -> T,
+    onLoad: suspend LoadScope.() -> T,
   ): Result<T>
 
   /**
@@ -50,7 +50,7 @@ interface FLoader {
    */
   suspend fun <T> tryLoad(
     notifyLoading: Boolean = true,
-    onLoad: suspend () -> T,
+    onLoad: suspend LoadScope.() -> T,
   ): Result<T>
 
   /** 取消加载，并等待取消完成 */
@@ -63,15 +63,20 @@ interface FLoader {
     /** 最后一次的加载结果 */
     val result: Result<Unit>? = null,
   )
+
+  interface LoadScope {
+    fun onLoadFinish(block: suspend () -> Unit)
+  }
 }
 
 fun FLoader(): FLoader = LoaderImpl()
 
 //-------------------- impl --------------------
 
-private class LoaderImpl : FLoader {
+private class LoaderImpl : FLoader, FLoader.LoadScope {
   private val _mutator = Mutator()
   private val _stateFlow = MutableStateFlow(FLoader.State())
+  private var _onFinishBlock: (suspend () -> Unit)? = null
 
   override val stateFlow: Flow<FLoader.State>
     get() = _stateFlow.asStateFlow()
@@ -87,7 +92,7 @@ private class LoaderImpl : FLoader {
 
   override suspend fun <T> load(
     notifyLoading: Boolean,
-    onLoad: suspend () -> T,
+    onLoad: suspend FLoader.LoadScope.() -> T,
   ): Result<T> {
     return _mutator.mutate {
       doLoad(
@@ -99,7 +104,7 @@ private class LoaderImpl : FLoader {
 
   override suspend fun <T> tryLoad(
     notifyLoading: Boolean,
-    onLoad: suspend () -> T,
+    onLoad: suspend FLoader.LoadScope.() -> T,
   ): Result<T> {
     return _mutator.tryMutate {
       doLoad(
@@ -113,9 +118,14 @@ private class LoaderImpl : FLoader {
     _mutator.cancelMutate()
   }
 
+  override fun onLoadFinish(block: suspend () -> Unit) {
+    // 直接赋值，不验证当前是否正在执行onLoad
+    _onFinishBlock = block
+  }
+
   private suspend fun <T> Mutator.MutateScope.doLoad(
     notifyLoading: Boolean,
-    onLoad: suspend () -> T,
+    onLoad: suspend FLoader.LoadScope.() -> T,
   ): Result<T> {
     return try {
       if (notifyLoading) {
@@ -136,6 +146,10 @@ private class LoaderImpl : FLoader {
     } finally {
       if (notifyLoading) {
         _stateFlow.update { it.copy(isLoading = false) }
+      }
+      _onFinishBlock?.also { finishBlock ->
+        _onFinishBlock = null
+        finishBlock()
       }
     }
   }
