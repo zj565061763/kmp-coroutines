@@ -19,14 +19,14 @@ class LoaderTest : MainDispatcherTest() {
   @Test
   fun `test load when success`() = runTest {
     val loader = FLoader()
-    assertEquals(null, loader.state.result)
+    assertEquals(null, loader.stateFlow.value.result)
 
     var container = ""
     loader.load {
       onLoadFinish { container += "onLoadFinish" }
       1
     }.also { result ->
-      assertEquals(true, loader.state.result!!.isSuccess)
+      assertEquals(true, loader.stateFlow.value.result!!.isSuccess)
       assertEquals(1, result.getOrThrow())
       assertEquals("onLoadFinish", container)
     }
@@ -42,7 +42,7 @@ class LoaderTest : MainDispatcherTest() {
       error("error in block")
     }.also { result ->
       assertEquals("error in block", result.exceptionOrNull()!!.message)
-      assertEquals("error in block", loader.state.result!!.exceptionOrNull()!!.message)
+      assertEquals("error in block", loader.stateFlow.value.result!!.exceptionOrNull()!!.message)
       assertEquals("onLoadFinish", container)
     }
   }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -20,16 +21,10 @@ import kotlin.coroutines.cancellation.CancellationException
 
 interface FLoader {
   /** 状态流 */
-  val stateFlow: Flow<State>
-
-  /** 加载状态流 */
-  val loadingFlow: Flow<Boolean>
-
-  /** 状态 */
-  val state: State
+  val stateFlow: StateFlow<State>
 
   /** 是否正在加载中 */
-  val isLoading: Boolean
+  fun isLoading(): Boolean
 
   /**
    * 开始加载，如果上一次加载还未完成，再次调用此方法，会取消上一次加载，
@@ -67,24 +62,24 @@ interface FLoader {
 
 fun FLoader(): FLoader = LoaderImpl()
 
+/** 加载状态流 */
+val FLoader.loadingFlow: Flow<Boolean>
+  get() = stateFlow.map { it.isLoading }.distinctUntilChanged()
+
+/** 加载状态流 */
+val FLoader.resultFlow: Flow<Result<Unit>?>
+  get() = stateFlow.map { it.result }.distinctUntilChanged()
+
 //-------------------- impl --------------------
 
-private class LoaderImpl : FLoader, FLoader.LoadScope {
+private class LoaderImpl : FLoader {
   private val _mutator = Mutator()
   private val _stateFlow = MutableStateFlow(FLoader.State())
-  private var _onFinishBlock: (suspend () -> Unit)? = null
+  override val stateFlow: StateFlow<FLoader.State> = _stateFlow.asStateFlow()
 
-  override val stateFlow: Flow<FLoader.State>
-    get() = _stateFlow.asStateFlow()
-
-  override val loadingFlow: Flow<Boolean>
-    get() = _stateFlow.map { it.isLoading }.distinctUntilChanged()
-
-  override val state: FLoader.State
-    get() = _stateFlow.value
-
-  override val isLoading: Boolean
-    get() = state.isLoading
+  override fun isLoading(): Boolean {
+    return _stateFlow.value.isLoading
+  }
 
   override suspend fun <T> load(onLoad: suspend FLoader.LoadScope.() -> T): Result<T> {
     return _mutator.mutate {
@@ -102,14 +97,11 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
     _mutator.cancelMutate()
   }
 
-  override fun onLoadFinish(block: suspend () -> Unit) {
-    _onFinishBlock = block
-  }
-
   private suspend fun <T> Mutator.MutateScope.doLoad(onLoad: suspend FLoader.LoadScope.() -> T): Result<T> {
+    val loadScope = LoadScopeImpl()
     return try {
       _stateFlow.update { it.copy(isLoading = true) }
-      onLoad().let { data ->
+      with(loadScope) { onLoad() }.let { data ->
         Result.success(data).also {
           ensureMutateActive()
           _stateFlow.update { it.copy(result = Result.success(Unit)) }
@@ -123,8 +115,20 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
       }
     } finally {
       _stateFlow.update { it.copy(isLoading = false) }
-      _onFinishBlock?.also { finishBlock ->
-        _onFinishBlock = null
+      loadScope.notifyLoadFinish()
+    }
+  }
+
+  private class LoadScopeImpl : FLoader.LoadScope {
+    private var _onLoadFinishBlock: (suspend () -> Unit)? = null
+
+    override fun onLoadFinish(block: suspend () -> Unit) {
+      _onLoadFinishBlock = block
+    }
+
+    suspend fun notifyLoadFinish() {
+      _onLoadFinishBlock?.also { finishBlock ->
+        _onLoadFinishBlock = null
         finishBlock()
       }
     }
