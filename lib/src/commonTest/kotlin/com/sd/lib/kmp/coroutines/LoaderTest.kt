@@ -23,7 +23,11 @@ class LoaderTest : MainDispatcherTest() {
 
     var container = ""
     loader.load {
-      onLoadFinish { container += "onLoadFinish" }
+      assertEquals(true, loader.isLoading())
+      onLoadFinish {
+        assertEquals(false, loader.isLoading())
+        container += "onLoadFinish"
+      }
       1
     }.also { result ->
       assertEquals(true, loader.stateFlow.value.result!!.isSuccess)
@@ -38,7 +42,11 @@ class LoaderTest : MainDispatcherTest() {
 
     var container = ""
     loader.load {
-      onLoadFinish { container += "onLoadFinish" }
+      assertEquals(true, loader.isLoading())
+      onLoadFinish {
+        assertEquals(false, loader.isLoading())
+        container += "onLoadFinish"
+      }
       error("error in block")
     }.also { result ->
       assertEquals("error in block", result.exceptionOrNull()!!.message)
@@ -54,7 +62,11 @@ class LoaderTest : MainDispatcherTest() {
 
     val job = launch {
       loader.load {
-        onLoadFinish { container += "onLoadFinish1" }
+        assertEquals(true, loader.isLoading())
+        onLoadFinish {
+          assertEquals(false, loader.isLoading())
+          container += "onLoadFinish1"
+        }
         delay(Long.MAX_VALUE)
       }
     }.also {
@@ -62,7 +74,11 @@ class LoaderTest : MainDispatcherTest() {
     }
 
     loader.load {
-      onLoadFinish { container += "onLoadFinish2" }
+      assertEquals(true, loader.isLoading())
+      onLoadFinish {
+        assertEquals(false, loader.isLoading())
+        container += "onLoadFinish2"
+      }
       assertEquals("onLoadFinish1", container)
       assertEquals(true, job.isCancelled)
       assertEquals(true, job.isCompleted)
@@ -79,7 +95,11 @@ class LoaderTest : MainDispatcherTest() {
     var container = ""
     launch {
       loader.load {
-        onLoadFinish { container += "onLoadFinish" }
+        assertEquals(true, loader.isLoading())
+        onLoadFinish {
+          assertEquals(false, loader.isLoading())
+          container += "onLoadFinish"
+        }
         delay(Long.MAX_VALUE)
       }
     }.also { job ->
@@ -97,7 +117,11 @@ class LoaderTest : MainDispatcherTest() {
     var container = ""
     launch {
       loader.load {
-        onLoadFinish { container += "onLoadFinish" }
+        assertEquals(true, loader.isLoading())
+        onLoadFinish {
+          assertEquals(false, loader.isLoading())
+          container += "onLoadFinish"
+        }
         throw CancellationException()
       }
     }.also { job ->
@@ -114,7 +138,11 @@ class LoaderTest : MainDispatcherTest() {
     var container = ""
     launch {
       loader.load {
-        onLoadFinish { container += "onLoadFinish" }
+        assertEquals(true, loader.isLoading())
+        onLoadFinish {
+          assertEquals(false, loader.isLoading())
+          container += "onLoadFinish"
+        }
         currentCoroutineContext().cancel()
       }
     }.also { job ->
