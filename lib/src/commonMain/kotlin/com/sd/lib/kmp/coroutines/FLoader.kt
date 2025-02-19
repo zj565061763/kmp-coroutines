@@ -37,11 +37,11 @@ interface FLoader {
    *
    * 注意：[onLoad]中不允许嵌套调用[load]，否则会抛异常
    *
-   * @param notifyLoading 是否通知加载状态
+   * @param onLoading 加载状态回调，null-通知[FLoader.State.isLoading]
    * @param onLoad 加载回调
    */
   suspend fun <T> load(
-    notifyLoading: Boolean = true,
+    onLoading: ((Boolean) -> Unit)? = null,
     onLoad: suspend LoadScope.() -> T,
   ): Result<T>
 
@@ -49,7 +49,7 @@ interface FLoader {
    * 如果正在加载中，会抛出[CancellationException]
    */
   suspend fun <T> tryLoad(
-    notifyLoading: Boolean = true,
+    onLoading: ((Boolean) -> Unit)? = null,
     onLoad: suspend LoadScope.() -> T,
   ): Result<T>
 
@@ -94,24 +94,24 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
     get() = state.isLoading
 
   override suspend fun <T> load(
-    notifyLoading: Boolean,
+    onLoading: ((Boolean) -> Unit)?,
     onLoad: suspend FLoader.LoadScope.() -> T,
   ): Result<T> {
     return _mutator.mutate {
       doLoad(
-        notifyLoading = notifyLoading,
+        onLoading = onLoading,
         onLoad = onLoad,
       )
     }
   }
 
   override suspend fun <T> tryLoad(
-    notifyLoading: Boolean,
+    onLoading: ((Boolean) -> Unit)?,
     onLoad: suspend FLoader.LoadScope.() -> T,
   ): Result<T> {
     return _mutator.tryMutate {
       doLoad(
-        notifyLoading = notifyLoading,
+        onLoading = onLoading,
         onLoad = onLoad,
       )
     }
@@ -126,12 +126,14 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
   }
 
   private suspend fun <T> Mutator.MutateScope.doLoad(
-    notifyLoading: Boolean,
+    onLoading: ((Boolean) -> Unit)?,
     onLoad: suspend FLoader.LoadScope.() -> T,
   ): Result<T> {
     return try {
-      if (notifyLoading) {
+      if (onLoading == null) {
         _stateFlow.update { it.copy(isLoading = true) }
+      } else {
+        onLoading(true)
       }
       onLoad().let { data ->
         Result.success(data).also {
@@ -146,8 +148,10 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
         _stateFlow.update { it.copy(result = Result.failure(e)) }
       }
     } finally {
-      if (notifyLoading) {
+      if (onLoading == null) {
         _stateFlow.update { it.copy(isLoading = false) }
+      } else {
+        onLoading(false)
       }
       _onFinishBlock?.also { finishBlock ->
         _onFinishBlock = null

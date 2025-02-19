@@ -129,7 +129,7 @@ class LoaderTest : MainDispatcherTest() {
   fun `test loadingFlow when params true`() = runTest {
     val loader = FLoader()
     loader.loadingFlow.test {
-      loader.load(notifyLoading = true) {}
+      loader.load(onLoading = null) {}
       assertEquals(false, awaitItem())
       assertEquals(true, awaitItem())
       assertEquals(false, awaitItem())
@@ -140,7 +140,7 @@ class LoaderTest : MainDispatcherTest() {
   fun `test loadingFlow when params false`() = runTest {
     val loader = FLoader()
     loader.loadingFlow.test {
-      loader.load(notifyLoading = false) {}
+      loader.load(onLoading = {}) {}
       assertEquals(false, awaitItem())
     }
   }
