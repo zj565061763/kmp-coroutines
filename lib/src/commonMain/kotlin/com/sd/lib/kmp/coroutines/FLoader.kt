@@ -54,9 +54,9 @@ interface FLoader {
 
   interface LoadScope {
     /**
-     * onLoad成功或者失败都会触发[block]，触发时所在的协程可能已经被取消
+     * 加载成功，加载失败，或者加载被取消，都会在最后触发[block]
      */
-    fun onLoadFinish(block: suspend () -> Unit)
+    fun onLoadFinish(block: () -> Unit)
   }
 }
 
@@ -120,13 +120,13 @@ private class LoaderImpl : FLoader {
   }
 
   private class LoadScopeImpl : FLoader.LoadScope {
-    private var _onLoadFinishBlock: (suspend () -> Unit)? = null
+    private var _onLoadFinishBlock: (() -> Unit)? = null
 
-    override fun onLoadFinish(block: suspend () -> Unit) {
+    override fun onLoadFinish(block: () -> Unit) {
       _onLoadFinishBlock = block
     }
 
-    suspend fun notifyLoadFinish() {
+    fun notifyLoadFinish() {
       _onLoadFinishBlock?.also { finishBlock ->
         _onLoadFinishBlock = null
         finishBlock()
