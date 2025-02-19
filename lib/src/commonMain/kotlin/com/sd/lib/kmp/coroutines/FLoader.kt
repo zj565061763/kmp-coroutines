@@ -37,21 +37,14 @@ interface FLoader {
    *
    * 注意：[onLoad]中不允许嵌套调用[load]，否则会抛异常
    *
-   * @param notifyLoading 是否通知加载状态
    * @param onLoad 加载回调
    */
-  suspend fun <T> load(
-    notifyLoading: Boolean = true,
-    onLoad: suspend LoadScope.() -> T,
-  ): Result<T>
+  suspend fun <T> load(onLoad: suspend LoadScope.() -> T): Result<T>
 
   /**
    * 如果正在加载中，会抛出[CancellationException]
    */
-  suspend fun <T> tryLoad(
-    notifyLoading: Boolean = true,
-    onLoad: suspend LoadScope.() -> T,
-  ): Result<T>
+  suspend fun <T> tryLoad(onLoad: suspend LoadScope.() -> T): Result<T>
 
   /** 取消加载，并等待取消完成 */
   suspend fun cancel()
@@ -93,27 +86,15 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
   override val isLoading: Boolean
     get() = state.isLoading
 
-  override suspend fun <T> load(
-    notifyLoading: Boolean,
-    onLoad: suspend FLoader.LoadScope.() -> T,
-  ): Result<T> {
+  override suspend fun <T> load(onLoad: suspend FLoader.LoadScope.() -> T): Result<T> {
     return _mutator.mutate {
-      doLoad(
-        notifyLoading = notifyLoading,
-        onLoad = onLoad,
-      )
+      doLoad(onLoad)
     }
   }
 
-  override suspend fun <T> tryLoad(
-    notifyLoading: Boolean,
-    onLoad: suspend FLoader.LoadScope.() -> T,
-  ): Result<T> {
+  override suspend fun <T> tryLoad(onLoad: suspend FLoader.LoadScope.() -> T): Result<T> {
     return _mutator.tryMutate {
-      doLoad(
-        notifyLoading = notifyLoading,
-        onLoad = onLoad,
-      )
+      doLoad(onLoad)
     }
   }
 
@@ -125,14 +106,9 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
     _onFinishBlock = block
   }
 
-  private suspend fun <T> Mutator.MutateScope.doLoad(
-    notifyLoading: Boolean,
-    onLoad: suspend FLoader.LoadScope.() -> T,
-  ): Result<T> {
+  private suspend fun <T> Mutator.MutateScope.doLoad(onLoad: suspend FLoader.LoadScope.() -> T): Result<T> {
     return try {
-      if (notifyLoading) {
-        _stateFlow.update { it.copy(isLoading = true) }
-      }
+      _stateFlow.update { it.copy(isLoading = true) }
       onLoad().let { data ->
         Result.success(data).also {
           ensureMutateActive()
@@ -146,9 +122,7 @@ private class LoaderImpl : FLoader, FLoader.LoadScope {
         _stateFlow.update { it.copy(result = Result.failure(e)) }
       }
     } finally {
-      if (notifyLoading) {
-        _stateFlow.update { it.copy(isLoading = false) }
-      }
+      _stateFlow.update { it.copy(isLoading = false) }
       _onFinishBlock?.also { finishBlock ->
         _onFinishBlock = null
         finishBlock()
