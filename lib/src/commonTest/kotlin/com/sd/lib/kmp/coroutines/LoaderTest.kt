@@ -199,7 +199,17 @@ class LoaderTest : MainDispatcherTest() {
   }
 
   @Test
-  fun `test resultFlow load when error in block`() = runTest {
+  fun `test resultFlow when load success`() = runTest {
+    val loader = FLoader()
+    loader.resultFlow.test {
+      loader.load { 1 }
+      assertEquals(null, awaitItem())
+      assertEquals(true, awaitItem()!!.isSuccess)
+    }
+  }
+
+  @Test
+  fun `test resultFlow when load error in block`() = runTest {
     val loader = FLoader()
     loader.resultFlow.test {
       loader.load { error("error in block") }
@@ -209,12 +219,19 @@ class LoaderTest : MainDispatcherTest() {
   }
 
   @Test
-  fun `test resultFlow load when success`() = runTest {
+  fun `test resultFlow when load cancel`() = runTest {
     val loader = FLoader()
     loader.resultFlow.test {
-      loader.load { 1 }
+      launch {
+        loader.load {
+          delay(5_000)
+          1
+        }
+      }.also {
+        runCurrent()
+        loader.cancel()
+      }
       assertEquals(null, awaitItem())
-      assertEquals(true, awaitItem()!!.isSuccess)
     }
   }
 
