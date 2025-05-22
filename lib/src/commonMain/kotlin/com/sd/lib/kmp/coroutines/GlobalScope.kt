@@ -11,7 +11,7 @@ import kotlinx.coroutines.plus
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
-val FGlobalScope = MainScope() + CoroutineName("FGlobalScope")
+private val FGlobalScope = MainScope() + CoroutineName("FGlobalScope")
 
 /**
  * 全局协程，默认调度器[Dispatchers.Main]
