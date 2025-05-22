@@ -7,5 +7,5 @@ Kotlin Multiplatform coroutines utils library.
 # Gradle
 
 ```kotlin
-implementation("io.github.zj565061763.kmp:coroutines:1.1.6")
+implementation("io.github.zj565061763.kmp:coroutines:1.1.5")
 ```
