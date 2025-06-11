@@ -88,7 +88,7 @@ private class LoaderImpl : FLoader {
   }
 
   override suspend fun <T> tryLoad(onLoad: suspend FLoader.LoadScope.() -> T): Result<T> {
-    return _mutator.tryMutate {
+    return _mutator.mutateOrThrowCancellation {
       doLoad(onLoad)
     }
   }
@@ -140,7 +140,7 @@ private class Mutator {
   private val _jobMutex = Mutex()
   private val _mutateMutex = Mutex()
 
-  suspend fun <R> mutate(block: suspend MutateScope.() -> R): R {
+  suspend fun <T> mutate(block: suspend MutateScope.() -> T): T {
     checkNested()
     return mutate(
       onStart = {},
@@ -148,7 +148,7 @@ private class Mutator {
     )
   }
 
-  suspend fun <T> tryMutate(block: suspend MutateScope.() -> T): T {
+  suspend fun <T> mutateOrThrowCancellation(block: suspend MutateScope.() -> T): T {
     checkNested()
     return mutate(
       onStart = { if (_job?.isActive == true) throw CancellationException() },
